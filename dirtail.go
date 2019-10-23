@@ -80,6 +80,7 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 			case <-dt.stopReq:
 				file.Close()
 				return true
+			default:
 			}
 		}
 
