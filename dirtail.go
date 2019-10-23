@@ -68,20 +68,32 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 		if err != nil {
 			break
 		}
+		log.Printf("found file %s offset %d\n", path, dt.fileOffset)
 
 		file.Seek(int64(dt.fileOffset), 0)
 
 		scanner := bufio.NewScanner(file)
+		var buf [128]byte
+		scanner.Buffer(buf[:], bufio.MaxScanTokenSize)
 		for scanner.Scan() {
 			line := scanner.Text()
+			dt.fileOffset = dt.fileOffset + uint32(len(line)) + 2 // "\r\n"
 			consumeFunc(line, dt.fileNum, dt.fileOffset)
-			dt.fileOffset = dt.fileOffset + uint32(len(line)) + 1
 			select {
 			case <-dt.stopReq:
+				log.Printf("Now Stop DirTail\n")
 				file.Close()
 				return true
 			default:
 			}
+		}
+
+		select {
+		case <-dt.stopReq:
+			log.Printf("Now Stop DirTail\n")
+			file.Close()
+			return true
+		default:
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -92,6 +104,7 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 		path = fmt.Sprintf("%s/%s%d%s",dt.dirName, dt.filePrefix, dt.fileNum + 1, dt.fileSuffix)
 		if fileExists(path) {
 			dt.fileNum++
+			dt.fileOffset = 0
 		} else {
 			break
 		}
