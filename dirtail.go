@@ -74,7 +74,7 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 
 		scanner := bufio.NewScanner(file)
 		var buf [128]byte
-		scanner.Buffer(buf[:], bufio.MaxScanTokenSize)
+		scanner.Buffer(buf[:], 1024 * 1024 * 2)
 		for scanner.Scan() {
 			line := scanner.Text()
 			dt.fileOffset = dt.fileOffset + uint32(len(line)) + 2 // "\r\n"
