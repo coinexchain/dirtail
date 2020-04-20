@@ -1,8 +1,8 @@
 package dirtail
 
 import (
+	"io"
 	"os"
-	"bufio"
 	"log"
 	"time"
 	"fmt"
@@ -61,6 +61,34 @@ func (dt *DirTail) Stop() {
 	<-dt.stopAck
 }
 
+func getc(f *os.File) (byte, error) {
+	b := make([]byte, 1)
+	_, err := f.Read(b)
+	return b[0], err
+}
+
+func readLine(f *os.File) ([]byte, error) {
+	buf := make([]byte, 0, 64*1024)
+	for {
+		b, err := getc(f)
+		if err != nil {
+			return nil, err
+		}
+		if b == byte('\r') {
+			b, err := getc(f)
+			if b != byte('\n') {
+				panic("Not \\r\\n!")
+			}
+			if err != nil {
+				return nil, err
+			}
+			break
+		}
+		buf = append(buf, b)
+	}
+	return buf, nil
+}
+
 func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset uint32)) bool {
 	for {
 		path := fmt.Sprintf("%s/%s%d%s",dt.dirName, dt.filePrefix, dt.fileNum, dt.fileSuffix)
@@ -72,13 +100,16 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 
 		file.Seek(int64(dt.fileOffset), 0)
 
-		scanner := bufio.NewScanner(file)
-		var buf [128]byte
-		scanner.Buffer(buf[:], 1024 * 1024 * 64)
-		for scanner.Scan() {
-			line := scanner.Text()
+		for {
+			line, err := readLine(file)
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				log.Fatal(err)
+				break
+			}
 			dt.fileOffset = dt.fileOffset + uint32(len(line)) + 2 // "\r\n"
-			consumeFunc(line, dt.fileNum, dt.fileOffset)
+			consumeFunc(string(line), dt.fileNum, dt.fileOffset)
 			select {
 			case <-dt.stopReq:
 				log.Printf("Now Stop DirTail\n")
@@ -96,9 +127,6 @@ func (dt *DirTail) consume(consumeFunc func(line string, fileNum uint32, offset 
 		default:
 		}
 
-		if err := scanner.Err(); err != nil {
-			log.Fatal(err)
-		}
 		file.Close()
 
 		path = fmt.Sprintf("%s/%s%d%s",dt.dirName, dt.filePrefix, dt.fileNum + 1, dt.fileSuffix)
