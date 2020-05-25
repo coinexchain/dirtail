@@ -1,6 +1,7 @@
 package dirtail
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"log"
@@ -65,6 +66,22 @@ func getc(f *os.File) (byte, error) {
 	b := make([]byte, 1)
 	_, err := f.Read(b)
 	return b[0], err
+}
+
+func Escape(line []byte) []byte {
+	if bytes.Index(line, []byte("\r\n")) == -1 && bytes.Index(line, []byte{'\r','\n'}) == -1 {
+		return line
+	}
+	tmp := bytes.Replace(line, []byte("\r\n"), []byte("\r\n\r\n"), -1)
+	return bytes.Replace(tmp, []byte{'\r','\n'}, []byte("\r\n"), -1)
+}
+
+func Unescape(line []byte) []byte {
+	if bytes.Index(line, []byte("\r\n")) == -1 {
+		return line
+	}
+	tmp := bytes.Replace(line, []byte("\r\n"), []byte{'\r','\n'}, -1)
+	return bytes.Replace(tmp, []byte("\r\n\r\n"), []byte("\r\n"), -1)
 }
 
 func readLine(f *os.File) ([]byte, error) {
